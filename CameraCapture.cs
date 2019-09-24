@@ -112,10 +112,12 @@ public class CameraCapture : MonoBehaviour
 			yield break;
 		}
         if (targetCamera.targetTexture != null ) targetCamera.targetTexture.Release();
-        RenderTexture renderTex = new RenderTexture(width, height, 24);
         Texture2D tex = new Texture2D(width, height, TextureFormat.ARGB32, false);
         statusText = "レンダリングしてTexture2Dに変換中…";
-        yield return new WaitForEndOfFrame();
+        for (int i = 0; i < 3; ++i) {
+            yield return new WaitForEndOfFrame();
+        }
+        RenderTexture renderTex = RenderTexture.GetTemporary(width, height, 24);
         RenderTexture.active = renderTex;
         targetCamera.targetTexture = renderTex;
 		targetCamera.Render();
@@ -123,9 +125,11 @@ public class CameraCapture : MonoBehaviour
         tex.Apply();
         RenderTexture.active = null;
         targetCamera.targetTexture = null;
-        Destroy(renderTex);
+        RenderTexture.ReleaseTemporary(renderTex);
         statusText = "PNGにエンコード中…";
-        yield return new WaitForEndOfFrame();
+        for (int i = 0; i < 3; ++i) {
+            yield return new WaitForEndOfFrame();
+        }
         byte[] bytes = tex.EncodeToPNG();
         statusText = "保存中…";
         yield return new WaitForEndOfFrame();

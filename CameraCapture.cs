@@ -112,7 +112,7 @@ public class CameraCapture : MonoBehaviour
         mainCamera.targetTexture = null;
         Destroy(renderTex);
 
-        String fileName = DateTime.Now.ToString("ScreenShot-yyyy-MM-dd_HH-mm-ss") + ".png";
+        String fileName = "Saved-" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".png";
         File.WriteAllBytes(Application.dataPath + "/../Assets/" + fileName, bytes);
         Debug.Log("キャプチャしました！ width: " + width + " height: " + height);
 	}
@@ -137,5 +137,4 @@ public class ScreenShotSaverEditor : Editor {
         EditorGUI.EndDisabledGroup();
         if (GUILayout.Button("キャプチャ")) cameraCapture.capture();
     }
-
 }

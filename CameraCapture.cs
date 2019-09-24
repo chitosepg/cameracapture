@@ -100,7 +100,7 @@ public class CameraCapture : MonoBehaviour
         if (mainCamera.targetTexture != null ) mainCamera.targetTexture.Release();
         RenderTexture renderTex = new RenderTexture(width, height, 24);
         mainCamera.targetTexture = renderTex;
-		Texture2D tex = new Texture2D(renderTex.width, renderTex.height, TextureFormat.ARGB32, false, false);
+		Texture2D tex = new Texture2D(renderTex.width, renderTex.height, TextureFormat.ARGB32, false);
 		mainCamera.Render();
         RenderTexture.active = renderTex;
         tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
@@ -134,7 +134,7 @@ public class ScreenShotSaverEditor : Editor {
         cameraCapture.paperHeight = EditorGUILayout.FloatField(
             "高さ（mm）", cameraCapture.paperHeight);
         EditorGUI.EndDisabledGroup();
-        if (GUILayout.Button("Capture")) cameraCapture.capture();
+        if (GUILayout.Button("キャプチャ")) cameraCapture.capture();
     }
 
 }

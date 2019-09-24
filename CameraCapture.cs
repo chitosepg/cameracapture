@@ -112,7 +112,8 @@ public class CameraCapture : MonoBehaviour
         mainCamera.targetTexture = null;
         Destroy(renderTex);
 
-        File.WriteAllBytes(Application.dataPath + "/../Assets/SavedScreen.png", bytes);
+        String fileName = DateTime.Now.ToString("ScreenShot-yyyy-MM-dd_HH-mm-ss") + ".png";
+        File.WriteAllBytes(Application.dataPath + "/../Assets/" + fileName, bytes);
         Debug.Log("キャプチャしました！ width: " + width + " height: " + height);
 	}
 }

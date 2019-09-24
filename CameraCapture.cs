@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEditor;
 using System.IO;
 using System;
+using System.Threading;
 
 public enum PaperSize {
     A0,
@@ -23,11 +24,14 @@ public enum PaperSize {
 
 public class CameraCapture : MonoBehaviour
 {
-	public Camera mainCamera;
-    [Range(1.0f, 2000.0f)]
+	public Camera targetCamera;
+    [Range(1.0f, 1000.0f)]
     public float dpi = 350.0f;
+    [HideInInspector]
     [Range(1.0f, 16.0f)]
-    public float dpiPerPpi = 1.0f;
+    public float dpiToPpiRatio = 1.0f;
+    [HideInInspector]
+    public int maximumPixels = 18000000;
     [HideInInspector]
     [Range(1.0f, 2000.0f)]
     public float paperWidth = 210.0f;
@@ -38,7 +42,11 @@ public class CameraCapture : MonoBehaviour
     public bool swap = false;
     [HideInInspector]
     public PaperSize paperSize = PaperSize.A4;
-    
+    [HideInInspector]
+    public String statusText = "";
+    [HideInInspector]
+    public bool captureFlag = false;
+    private bool beforeCaptureFlag = false;
     private bool isPlaying = false;
 
     private double inchPerMilli = 1.0 / 25.4;
@@ -73,15 +81,17 @@ public class CameraCapture : MonoBehaviour
         257
     };
 
-    void OnGUI()
-    {
+    private SynchronizationContext context = SynchronizationContext.Current;
+
+    void OnGUI() {
         isPlaying = EditorApplication.isPlaying;
     }
 
-    public void capture () {
+    public IEnumerator capture () {
 		if (!isPlaying) {
-			Debug.Log("プレイ中ではないのでキャプチャできません！");
-			return;
+			statusText = "プレイ中ではないのでキャプチャできません！";
+            captureFlag = false;
+			yield break;
 		}
         double paperWidthTemp = paperWidth * inchPerMilli;
         double paperHeightTemp = paperHeight * inchPerMilli;
@@ -94,37 +104,61 @@ public class CameraCapture : MonoBehaviour
             paperWidthTemp = paperHeightTemp;
             paperHeightTemp = temp;
         }
-        int width = (int)Math.Floor(dpi / Math.Sqrt(dpiPerPpi) * paperWidthTemp);
-        int height = (int)Math.Floor(dpi / Math.Sqrt(dpiPerPpi) * paperHeightTemp);
-        
-        if (mainCamera.targetTexture != null ) mainCamera.targetTexture.Release();
+        int width = (int)Math.Floor(dpi / Math.Sqrt(dpiToPpiRatio) * paperWidthTemp);
+        int height = (int)Math.Floor(dpi / Math.Sqrt(dpiToPpiRatio) * paperHeightTemp);
+        if (width * height > maximumPixels) {
+			statusText = "最大ピクセル数を超えています！";
+            captureFlag = false;
+			yield break;
+		}
+        if (targetCamera.targetTexture != null ) targetCamera.targetTexture.Release();
         RenderTexture renderTex = new RenderTexture(width, height, 24);
-        mainCamera.targetTexture = renderTex;
-		Texture2D tex = new Texture2D(renderTex.width, renderTex.height, TextureFormat.ARGB32, false);
-		mainCamera.Render();
+        Texture2D tex = new Texture2D(width, height, TextureFormat.ARGB32, false);
+        statusText = "レンダリングしてTexture2Dに変換中…";
+        yield return new WaitForEndOfFrame();
         RenderTexture.active = renderTex;
+        targetCamera.targetTexture = renderTex;
+		targetCamera.Render();
         tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
         tex.Apply();
-
-        byte[] bytes = tex.EncodeToPNG();
-        Destroy(tex);
         RenderTexture.active = null;
-        mainCamera.targetTexture = null;
+        targetCamera.targetTexture = null;
         Destroy(renderTex);
-
+        statusText = "PNGにエンコード中…";
+        yield return new WaitForEndOfFrame();
+        byte[] bytes = tex.EncodeToPNG();
+        statusText = "保存中…";
+        yield return new WaitForEndOfFrame();
         String fileName = "Saved-" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".png";
         File.WriteAllBytes(Application.dataPath + "/../Assets/" + fileName, bytes);
-        Debug.Log("キャプチャしました！ width: " + width + " height: " + height);
+        Destroy(tex);
+        statusText = "キャプチャしました！ width: " + width + " height: " + height;
+        captureFlag = false;
 	}
+
+    public void startCapture () {
+        StartCoroutine(capture());
+    }
+
+    void Update () {
+        if (beforeCaptureFlag && captureFlag == false) {
+            beforeCaptureFlag = false;
+        } else if (beforeCaptureFlag == false && captureFlag) {
+            beforeCaptureFlag = true;
+            startCapture();
+        }
+    }
 }
 
 [CustomEditor(typeof(CameraCapture))]
-public class ScreenShotSaverEditor : Editor {
+public class CameraCaptureEditor : Editor {
     private bool disabled;
     public override void OnInspectorGUI () {
         base.OnInspectorGUI ();
 
         CameraCapture cameraCapture = target as CameraCapture;
+        cameraCapture.dpiToPpiRatio = EditorGUILayout.FloatField(
+            "DPI/PPI比", cameraCapture.dpiToPpiRatio);
         cameraCapture.swap = EditorGUILayout.Toggle("幅と高さを入れ替える", cameraCapture.swap);
         cameraCapture.paperSize = (PaperSize)EditorGUILayout.EnumPopup(
             "用紙サイズ", cameraCapture.paperSize);
@@ -135,6 +169,9 @@ public class ScreenShotSaverEditor : Editor {
         cameraCapture.paperHeight = EditorGUILayout.FloatField(
             "高さ（mm）", cameraCapture.paperHeight);
         EditorGUI.EndDisabledGroup();
-        if (GUILayout.Button("キャプチャ")) cameraCapture.capture();
+        cameraCapture.maximumPixels = EditorGUILayout.IntField(
+            "最大ピクセル数", cameraCapture.maximumPixels);
+        EditorGUILayout.LabelField("ステータス", cameraCapture.statusText);
+        if (GUILayout.Button("キャプチャ")) cameraCapture.captureFlag = true;
     }
 }

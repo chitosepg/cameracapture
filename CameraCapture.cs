@@ -22,14 +22,14 @@ public enum PaperSize {
     Custom
 };
 
+[RequireComponent(typeof(Camera))]
 public class CameraCapture : MonoBehaviour
 {
-	public Camera targetCamera;
     [Range(1.0f, 1000.0f)]
     public float dpi = 350.0f;
     [HideInInspector]
     [Range(1.0f, 16.0f)]
-    public float dpiToPpiRatio = 1.0f;
+    public float ppiToDpiRatio = 1.0f;
     [HideInInspector]
     public int maximumPixels = 18000000;
     [HideInInspector]
@@ -104,52 +104,48 @@ public class CameraCapture : MonoBehaviour
             paperWidthTemp = paperHeightTemp;
             paperHeightTemp = temp;
         }
-        int width = (int)Math.Floor(dpi / Math.Sqrt(dpiToPpiRatio) * paperWidthTemp);
-        int height = (int)Math.Floor(dpi / Math.Sqrt(dpiToPpiRatio) * paperHeightTemp);
+        int width = (int)Math.Floor(dpi / Math.Sqrt(ppiToDpiRatio) * paperWidthTemp);
+        int height = (int)Math.Floor(dpi / Math.Sqrt(ppiToDpiRatio) * paperHeightTemp);
         if (width * height > maximumPixels) {
 			statusText = "最大ピクセル数を超えています！";
             captureFlag = false;
 			yield break;
 		}
+        var targetCamera = GetComponent<Camera>();
         if (targetCamera.targetTexture != null ) targetCamera.targetTexture.Release();
-        Texture2D tex = new Texture2D(width, height, TextureFormat.ARGB32, false);
-        statusText = "レンダリングしてTexture2Dに変換中…";
-        for (int i = 0; i < 3; ++i) {
-            yield return new WaitForEndOfFrame();
-        }
-        RenderTexture renderTex = RenderTexture.GetTemporary(width, height, 24);
-        RenderTexture.active = renderTex;
+        statusText = "テクスチャ生成中…";
+        yield return new WaitForEndOfFrame();
+        RenderTexture renderTex = RenderTexture.GetTemporary(width, height);
+        Texture2D tex = new Texture2D(width, height, TextureFormat.RGB24, false);
+        statusText = "バッファ設定中…";
+        for (int i = 0; i < 3; ++i) yield return new WaitForEndOfFrame();
         targetCamera.targetTexture = renderTex;
-		targetCamera.Render();
+        statusText = "レンダリングしてTexture2Dに変換中…";
+        for (int i = 0; i < 3; ++i) yield return new WaitForEndOfFrame();
+        RenderTexture.active = renderTex;
         tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
         tex.Apply();
         RenderTexture.active = null;
         targetCamera.targetTexture = null;
         RenderTexture.ReleaseTemporary(renderTex);
         statusText = "PNGにエンコード中…";
-        for (int i = 0; i < 3; ++i) {
-            yield return new WaitForEndOfFrame();
-        }
+        for (int i = 0; i < 3; ++i) yield return new WaitForEndOfFrame();
         byte[] bytes = tex.EncodeToPNG();
+        Destroy(tex);
         statusText = "保存中…";
         yield return new WaitForEndOfFrame();
         String fileName = "Saved-" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".png";
         File.WriteAllBytes(Application.dataPath + "/../Assets/" + fileName, bytes);
-        Destroy(tex);
         statusText = "キャプチャしました！ width: " + width + " height: " + height;
         captureFlag = false;
 	}
-
-    public void startCapture () {
-        StartCoroutine(capture());
-    }
 
     void Update () {
         if (beforeCaptureFlag && captureFlag == false) {
             beforeCaptureFlag = false;
         } else if (beforeCaptureFlag == false && captureFlag) {
             beforeCaptureFlag = true;
-            startCapture();
+            StartCoroutine(capture());
         }
     }
 }
@@ -161,8 +157,8 @@ public class CameraCaptureEditor : Editor {
         base.OnInspectorGUI ();
 
         CameraCapture cameraCapture = target as CameraCapture;
-        cameraCapture.dpiToPpiRatio = EditorGUILayout.FloatField(
-            "DPI/PPI比", cameraCapture.dpiToPpiRatio);
+        cameraCapture.ppiToDpiRatio = EditorGUILayout.FloatField(
+            "DPI/PPI比", cameraCapture.ppiToDpiRatio);
         cameraCapture.swap = EditorGUILayout.Toggle("幅と高さを入れ替える", cameraCapture.swap);
         cameraCapture.paperSize = (PaperSize)EditorGUILayout.EnumPopup(
             "用紙サイズ", cameraCapture.paperSize);
